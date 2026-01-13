@@ -1,43 +1,36 @@
 import React, { useState } from 'react';
-// 1. استدعاء المحرك الرسمي الجديد
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const App = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
 
-  const analyzeImage = async (e: any) => {
-    const file = e.target.files[0];
+  const analyzeImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
+
     setLoading(true);
     setResult(null);
-
     const reader = new FileReader();
+
     reader.onloadend = async () => {
       try {
-        const base64Data = (reader.result as string).split(',')[1];
-        
-        // 2. استخدام المفتاح اللي إنت مسجله في Vercel
         const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-        
-        // 3. تحديد الموديل (Flash هو الأسرع والأفضل حالياً)
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        const prompt = "Identify this medical prescription or test. Return ONLY a JSON object: {identifiedTest, diagnosisAr, diagnosisEn}";
+        const base64Data = (reader.result as string).split(',')[1];
+        const prompt = "Identify this medical prescription. Return ONLY JSON: {identifiedTest, diagnosisAr, diagnosisEn}";
+        
+        const imagePart = {
+          inlineData: { data: base64Data, mimeType: "image/jpeg" },
+        };
 
-        // 4. إرسال الطلب بالطريقة الرسمية
-        const result = await model.generateContent([
-          prompt,
-          { inlineData: { data: base64Data, mimeType: "image/jpeg" } }
-        ]);
-
-        const response = await result.response;
-        let text = response.text().replace(/```json|```/g, "").trim();
+        const response = await model.generateContent([prompt, imagePart]);
+        const text = response.response.text().replace(/```json|```/g, "").trim();
         
         setResult(JSON.parse(text));
       } catch (err: any) {
-        // لو حصل مشكلة، هيدينا رسالة واضحة
-        alert("تنبيه: " + err.message);
+        alert("فشل التحليل: " + err.message);
       } finally {
         setLoading(false);
       }
@@ -46,26 +39,36 @@ const App = () => {
   };
 
   return (
-    <div style={{ background: '#070D1D', color: 'white', minHeight: '100vh', padding: '40px 20px', textAlign: 'center', fontFamily: 'sans-serif' }}>
-      <h1 style={{ color: '#E31E24', fontSize: '2.5rem', fontWeight: 'bold' }}>ALFACAM PRO</h1>
-      <p style={{ color: '#9CA3AF' }}>التحليل الذكي المدعوم بمحرك جوجل الرسمي</p>
+    <div style={{ background: '#070D1D', color: 'white', minHeight: '100vh', padding: '20px', textAlign: 'center', fontFamily: 'sans-serif' }}>
+      <h1 style={{ color: '#E31E24', fontWeight: 'bold', fontSize: '2.5rem' }}>ALFACAM PRO</h1>
+      <p style={{ color: '#9CA3AF', marginBottom: '30px' }}>نظام التحليل الذكي الرسمي</p>
       
       {!result ? (
-        <div style={{ marginTop: '20px' }}>
+        <div style={{ marginTop: '50px' }}>
           {loading ? (
-            <div style={{ padding: '40px' }}>
-               <p style={{ color: '#E31E24', fontSize: '1.2rem' }}>جاري فحص الروشتة بالمحرك الجديد...</p>
-            </div>
+            <p style={{ color: '#E31E24', fontSize: '1.2rem' }}>جاري التحليل... برجاء الانتظار</p>
           ) : (
-            <div style={{ border: '2px dashed #1F2937', padding: '50px 20px', borderRadius: '30px', background: '#0B1224' }}>
-              <label style={{ background: '#E31E24', color: 'white', padding: '18px 35px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold' }}>
-                رفع الصورة للتحليل
+            <div style={{ border: '2px dashed #1F2937', padding: '60px 20px', borderRadius: '30px', background: '#0B1224', maxWidth: '400px', margin: '0 auto' }}>
+              <label style={{ background: '#E31E24', color: 'white', padding: '15px 30px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold' }}>
+                اختر صورة الروشتة
                 <input type="file" accept="image/*" onChange={analyzeImage} style={{ display: 'none' }} />
               </label>
             </div>
           )}
         </div>
       ) : (
-        <div style={{ background: '#111827', padding: '30px', borderRadius: '25px', border: '1px solid #374151', maxWidth: '500px', margin: '0 auto', textAlign: 'right' }}>
-          <h2 style={{ color: '#10B981', textAlign: 'center', marginBottom: '25px' }}>تم التحليل بنجاح ✨</h2>
-          <p><b>اسم الفحص:</b> {result.identifiedTest}</p>
+        <div style={{ background: '#111827', padding: '30px', borderRadius: '25px', border: '1px solid #374151', maxWidth: '450px', margin: '20px auto', textAlign: 'right' }}>
+          <h2 style={{ color: '#10B981', textAlign: 'center', marginBottom: '20px' }}>تم التحليل بنجاح ✨</h2>
+          <p style={{ marginBottom: '15px' }}><b>اسم الفحص:</b> {result.identifiedTest}</p>
+          <div style={{ background: '#1F2937', padding: '20px', borderRadius: '15px', borderRight: '5px solid #E31E24' }}>
+             <p style={{ color: '#E31E24', fontSize: '0.9rem', fontWeight: 'bold' }}>التشخيص التقريبي:</p>
+             <p style={{ fontSize: '1.1rem', marginTop: '10px' }}>{result.diagnosisAr}</p>
+          </div>
+          <button onClick={() => setResult(null)} style={{ width: '100%', marginTop: '30px', padding: '15px', background: '#374151', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>تحليل صورة أخرى</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
