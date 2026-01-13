@@ -10,6 +10,7 @@ const App = () => {
     setLoading(true);
 
     try {
+      // التوكن الخاص بك
       const token = "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"; 
       const data = await file.arrayBuffer();
       
@@ -23,9 +24,9 @@ const App = () => {
       );
 
       const res = await response.json();
-      setResult(res[0].generated_text);
+      setResult(res[0]?.generated_text || "لم يتم التعرف على النص");
     } catch (err) {
-      alert("مشكلة في الاتصال بالمحرك الجديد");
+      alert("حدث خطأ في الاتصال بالمحرك");
     } finally {
       setLoading(false);
     }
@@ -36,13 +37,13 @@ const App = () => {
       <h1 style={{ color: '#E31E24' }}>ALFACAM HF</h1>
       {!result ? (
         <div>
-          {loading ? <p>جاري التحليل السريع...</p> : <input type="file" onChange={analyzeImage} />}
+          {loading ? <p>جاري التحليل...</p> : <input type="file" accept="image/*" onChange={analyzeImage} />}
         </div>
       ) : (
         <div style={{ background: '#111827', padding: '20px', borderRadius: '15px' }}>
           <h2>النتيجة:</h2>
           <p>{result}</p>
-          <button onClick={() => setResult("")}>إعادة</button>
+          <button onClick={() => setResult("")} style={{ marginTop: '10px' }}>إعادة</button>
         </div>
       )}
     </div>
