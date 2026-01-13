@@ -8,10 +8,11 @@ const App = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setLoading(true);
+    setResult("");
 
     try {
-      // التوكن الخاص بك
-      const token = "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"; 
+      // سحب التوكن من إعدادات Vercel اللي لسه ضايفينها
+      const token = import.meta.env.VITE_HF_TOKEN; 
       const data = await file.arrayBuffer();
       
       const response = await fetch(
@@ -24,9 +25,16 @@ const App = () => {
       );
 
       const res = await response.json();
-      setResult(res[0]?.generated_text || "لم يتم التعرف على النص");
+
+      if (res.error) {
+         // لو المحرك لسه بيحمل (Warm-up)
+         alert("المحرك بيفتح، جرب كمان 10 ثواني");
+         return;
+      }
+
+      setResult(res[0]?.generated_text || "لم أستطع تحليل الصورة");
     } catch (err) {
-      alert("حدث خطأ في الاتصال بالمحرك");
+      alert("حدث خطأ في الاتصال بالمحرك"); //
     } finally {
       setLoading(false);
     }
@@ -37,13 +45,17 @@ const App = () => {
       <h1 style={{ color: '#E31E24' }}>ALFACAM HF</h1>
       {!result ? (
         <div>
-          {loading ? <p>جاري التحليل...</p> : <input type="file" accept="image/*" onChange={analyzeImage} />}
+          {loading ? <p>جاري التحليل...</p> : (
+             <div style={{ border: '2px dashed #1F2937', padding: '40px', borderRadius: '20px' }}>
+                <input type="file" accept="image/*" onChange={analyzeImage} />
+             </div>
+          )}
         </div>
       ) : (
-        <div style={{ background: '#111827', padding: '20px', borderRadius: '15px' }}>
-          <h2>النتيجة:</h2>
-          <p>{result}</p>
-          <button onClick={() => setResult("")} style={{ marginTop: '10px' }}>إعادة</button>
+        <div style={{ background: '#111827', padding: '30px', borderRadius: '20px', border: '1px solid #374151' }}>
+          <h2>تم التحليل:</h2>
+          <p style={{ margin: '20px 0', fontSize: '1.2rem' }}>{result}</p>
+          <button onClick={() => setResult("")} style={{ background: '#E31E24', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '10px' }}>إعادة</button>
         </div>
       )}
     </div>
