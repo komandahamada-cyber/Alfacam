@@ -1,51 +1,65 @@
 import { GoogleGenAI } from "@google/genai";
-import { AnalysisResult } from "../types";
+import { AnalysisResult } from "./types"; // ✅ تم تعديل المسار ليناسب مشروعك
 
-// ✅ الطريقة الصحيحة لجلب المفتاح في مشروعك
+// ✅ جلب المفتاح باستخدام صيغة Vite الصحيحة
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-const SYSTEM_INSTRUCTION = `
-You are Alfacam, an elite medical handwriting decoder. 
-Your task is to decode medical handwriting from lab tests and prescriptions.
-
-OUTPUT REQUIREMENTS:
-1. Identified Test Name.
-2. Diagnosis in BOTH Arabic and English.
-3. Detailed medical explanation in BOTH Arabic and English.
-4. Standard ICD-10 and ICD-11 codes.
-
-IMPORTANT: 
-- DO NOT include any insurance provider names or codes.
-- Focus strictly on standard international ICD coding.
-- If the image is blurry, set "isUnclear": true.
-- Provide a professional medical disclaimer in Arabic.
-`;
+const genAI = new GoogleGenAI(API_KEY || "");
 
 export const analyzeMedicalImage = async (base64Image: string): Promise<AnalysisResult> => {
-  // ✅ استخدام الطريقة الحديثة لتعريف الذكاء الاصطناعي
-  const genAI = new GoogleGenAI(API_KEY);
+  // ✅ استخدام موديل مستقر وسريع
   const model = genAI.getGenerativeModel({ 
     model: "gemini-1.5-flash",
     generationConfig: { responseMimeType: "application/json" }
   });
+
+  const prompt = `You are Alfacam by Alfa Labs. Task: Decode medical handwriting from the image. 
+  Rules:
+  1. Return JSON ONLY.
+  2. No insurance names.
+  3. Include diagnosis and description in BOTH Arabic and English.
+  4. Use standard ICD-10/11 codes.
   
-  const result = await model.generateContent([
-    { text: SYSTEM_INSTRUCTION },
-    { text: "Analyze this medical document. Provide findings in Arabic and English with ICD codes only." },
-    { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
-  ]);
+  Expected JSON structure:
+  {
+    "identifiedTest": "Name of test",
+    "diagnosisAr": "التشخيص بالعربي",
+    "diagnosisEn": "Diagnosis in English",
+    "icd10Code": "Code",
+    "icd11Code": "Code",
+    "descriptionAr": "شرح مفصل بالعربي",
+    "descriptionEn": "Detailed explanation in English",
+    "confidence": 0.95,
+    "isUnclear": false,
+    "disclaimer": "نص إخلاء المسؤولية الطبي"
+  }`;
 
-  const response = await result.response;
-  const data = JSON.parse(response.text().trim());
+  try {
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: base64Image,
+        },
+      },
+    ]);
 
-  return {
-    ...data,
-    id: Math.random().toString(36).substr(2, 9),
-    timestamp: Date.now()
-  };
+    const response = await result.response;
+    const data = JSON.parse(response.text().trim());
+
+    return {
+      ...data,
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp: Date.now()
+    };
+  } catch (error) {
+    console.error("Gemini Analysis Error:", error);
+    throw error;
+  }
 };
 
-// تم تبسيط وظيفة الصوت لتعمل بشكل مباشر
+// وظائف الصوت مبسطة لتعمل مباشرة عبر المتصفح لضمان الاستقرار
 export const stopSpeaking = () => {
   window.speechSynthesis.cancel();
 };
