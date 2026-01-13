@@ -1,0 +1,7 @@
+{
+  "name": "Alfacam - Medical OCR",
+  "description": "An AI-powered application designed to read and interpret difficult medical handwriting from prescriptions and lab tests with high accuracy.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

@@ -1,0 +1,341 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Alfacam | Alfa Labs Medical AI</title>
+    
+    <!-- PWA & SEO -->
+    <meta name="theme-color" content="#070D1D">
+    <meta name="description" content="Alfacam - تطبيق الذكاء الاصطناعي لقراءة الروشتات الطبية والتحاليل من Alfa Labs">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/822/822143.png">
+
+    <!-- Styles & Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+      :root {
+        --alfa-red: #E31E24;
+        --alfa-blue: #1D428A;
+        --alfa-dark: #070D1D;
+      }
+      body {
+        font-family: 'IBM Plex Sans Arabic', sans-serif;
+        background-color: var(--alfa-dark);
+        color: #f8fafc;
+        margin: 0;
+        overflow-x: hidden;
+        -webkit-tap-highlight-color: transparent;
+      }
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes scaleIn {
+        from { opacity: 0; transform: scale(0.9); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+      .animate-scale-in { animation: scaleIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+      .stagger-1 { animation-delay: 0.1s; }
+      .stagger-2 { animation-delay: 0.2s; }
+      
+      .drop-glow { filter: drop-shadow(0 0 10px rgba(227, 30, 36, 0.5)); }
+      .medical-card { background: rgba(17, 26, 46, 0.8); backdrop-filter: blur(20px); border: 1px border rgba(255,255,255,0.1); }
+      
+      @media print {
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+        body { background: white; color: black; }
+      }
+      .print-only { display: none; }
+    </style>
+
+    <!-- JS Imports Map -->
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "@google/genai": "https://esm.sh/@google/genai@1.35.0",
+    "lucide-react": "https://esm.sh/lucide-react@0.460.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "vite": "https://esm.sh/vite@^7.3.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import React, { useState, useEffect, useRef, useCallback } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { GoogleGenAI, Type, Modality } from '@google/genai';
+        import { 
+            Camera, Image as ImageIcon, Droplet, Clock, ChevronLeft, Trash2, 
+            AlertCircle, FileText, Clipboard, ShieldCheck, Activity, 
+            Volume2, VolumeX, Hash, X, Move, MessageCircle, Globe, Download
+        } from 'lucide-react';
+
+        // --- Constants & System Logic ---
+        const AppState = { CAMERA: 'CAM', CROP: 'CROP', PROC: 'PROC', RES: 'RES', HIST: 'HIST', ERR: 'ERR' };
+        
+        const SYSTEM_PROMPT = `You are Alfacam by Alfa Labs. Task: Decode medical handwriting. 
+        Return JSON ONLY: {identifiedTest, diagnosisAr, diagnosisEn, icd10Code, icd11Code, descriptionAr, descriptionEn, confidence, isUnclear, disclaimer}.
+        Rules: Professional medical tone, standard ICD codes, NO insurance names.`;
+
+        // --- Components ---
+        
+        const CameraView = ({ onCapture, onOpenHistory }) => {
+            const videoRef = useRef(null);
+            const canvasRef = useRef(null);
+            const fileInputRef = useRef(null);
+            const [isReady, setIsReady] = useState(false);
+
+            useEffect(() => {
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } } })
+                    .then(s => { if(videoRef.current) { videoRef.current.srcObject = s; setIsReady(true); } })
+                    .catch(e => alert("يرجى تفعيل الكاميرا للتشغيل"));
+            }, []);
+
+            const capture = () => {
+                const v = videoRef.current;
+                const c = canvasRef.current;
+                if(v && c) {
+                    c.width = v.videoWidth; c.height = v.videoHeight;
+                    c.getContext('2d').drawImage(v, 0, 0);
+                    onCapture(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
+                }
+            };
+
+            return (
+                <div className="relative h-screen w-full bg-black flex flex-col items-center">
+                    <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                    <div className="absolute top-12 left-0 right-0 px-6 flex justify-between z-30">
+                        <button onClick={onOpenHistory} className="p-3 bg-white/10 backdrop-blur-md rounded-2xl text-white border border-white/10 shadow-xl active:scale-90"><Clock/></button>
+                        <div className="bg-white/5 backdrop-blur-md px-5 py-2 rounded-full border border-white/10 flex items-center gap-2 drop-glow">
+                            <Droplet fill="#E31E24" size={16} className="text-[#E31E24]" />
+                            <h1 className="text-white font-black text-lg tracking-tight">alfa<span className="text-[#E31E24]">cam</span></h1>
+                        </div>
+                        <div className="w-10"></div>
+                    </div>
+                    
+                    <div className="absolute bottom-12 flex flex-col items-center gap-8 z-30 w-full">
+                        <div className="flex items-center gap-8 bg-black/40 backdrop-blur-3xl p-4 rounded-[3rem] border border-white/10 shadow-2xl">
+                            <button onClick={() => fileInputRef.current.click()} className="w-14 h-14 bg-white/5 rounded-full flex flex-col items-center justify-center text-white active:scale-90"><ImageIcon size={22}/></button>
+                            <button onClick={capture} className="w-20 h-20 bg-white rounded-full flex items-center justify-center border-4 border-[#1D428A] shadow-[0_0_30px_rgba(255,255,255,0.2)] active:scale-95 transition-transform">
+                                <Droplet fill="#E31E24" size={32} className="text-[#E31E24]" />
+                            </button>
+                            <div className="w-14 h-14 bg-white/5 rounded-full flex items-center justify-center opacity-20"><Globe size={22} className="text-white"/></div>
+                        </div>
+                        <div className="flex flex-col items-center gap-1">
+                            <p className="text-[10px] font-bold text-blue-300 tracking-[0.3em] uppercase">Alfa Laboratory Premium AI</p>
+                            <a href="https://wa.me/201098811992" target="_blank" className="bg-green-500/10 px-3 py-1 rounded-full border border-green-500/30 text-[9px] font-bold text-green-400 flex items-center gap-1">
+                                <MessageCircle size={10}/> واتساب المطور
+                            </a>
+                        </div>
+                    </div>
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => {
+                        const f = e.target.files[0];
+                        if(f) { const r = new FileReader(); r.onload = (ev) => onCapture(ev.target.result.split(',')[1]); r.readAsDataURL(f); }
+                    }} />
+                    <canvas ref={canvasRef} className="hidden" />
+                </div>
+            );
+        };
+
+        const ProcessingView = () => (
+            <div className="fixed inset-0 bg-[#070D1D] flex flex-col items-center justify-center p-10 text-center z-[100]">
+                <div className="relative mb-12">
+                    <div className="absolute inset-0 bg-[#E31E24]/30 blur-[60px] rounded-full scale-150 animate-pulse"></div>
+                    <Droplet fill="#E31E24" size={80} className="text-[#E31E24] animate-bounce relative z-10 drop-glow" />
+                </div>
+                <h2 className="text-4xl font-black text-white mb-2">alfa<span className="text-[#E31E24]">cam</span></h2>
+                <p className="text-slate-300 font-medium">جاري فك شفرة خط الطبيب بدقة عالية...</p>
+                <div className="mt-12 flex gap-3">
+                    {[1,2,3].map(i => <div key={i} className="w-3 h-3 bg-[#E31E24] rounded-full animate-bounce shadow-[0_0_15px_#E31E24]" style={{animationDelay: `${i*0.2}s`}} />)}
+                </div>
+            </div>
+        );
+
+        const ResultView = ({ result, onReset }) => {
+            const [speaking, setSpeaking] = useState(false);
+            const isSafe = !result.isUnclear && result.confidence > 0.8;
+            
+            const handleSpeak = async () => {
+                if(speaking) { stopSpeaking(); setSpeaking(false); return; }
+                setSpeaking(true);
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+                const res = await ai.models.generateContent({
+                    model: "gemini-2.5-flash-preview-tts",
+                    contents: [{ parts: [{ text: `التشخيص هو: ${result.diagnosisAr}. التوضيح: ${result.descriptionAr}` }] }],
+                    config: { responseModalities: [Modality.AUDIO], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } }
+                });
+                const audio64 = res.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                if(audio64) {
+                    const ctx = new AudioContext();
+                    const buf = await ctx.decodeAudioData(Uint8Array.from(atob(audio64), c => c.charCodeAt(0)).buffer);
+                    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination);
+                    src.onended = () => setSpeaking(false); src.start();
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-[#070D1D] p-6 overflow-y-auto" dir="rtl">
+                    <div className="max-w-lg mx-auto pt-6 pb-32 space-y-5">
+                        <div className="flex justify-center mb-8 animate-scale-in">
+                            <div className="bg-white/5 px-5 py-2 rounded-full border border-white/10 flex items-center gap-2 shadow-2xl">
+                                <Droplet fill="#E31E24" size={16} className="text-[#E31E24]" />
+                                <span className="text-white font-black text-lg">alfa<span className="text-[#E31E24]">cam</span></span>
+                            </div>
+                        </div>
+
+                        <div className={`p-5 rounded-[2rem] border animate-fade-in-up stagger-1 flex items-center justify-between ${isSafe ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                            <div className="flex items-center gap-4">
+                                <div className={`p-2 rounded-xl ${isSafe ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+                                    {isSafe ? <ShieldCheck className="text-green-400"/> : <AlertCircle className="text-red-400"/>}
+                                </div>
+                                <div className="text-right">
+                                    <h4 className="text-white font-bold text-sm">{isSafe ? 'تحليل عالي الدقة (100%)' : 'تنبيه: دقة منخفضة'}</h4>
+                                    <p className="text-slate-400 text-[10px]">Medical Precision System</p>
+                                </div>
+                            </div>
+                            <button onClick={handleSpeak} className={`p-3 rounded-2xl transition-all active:scale-90 ${speaking ? 'bg-[#E31E24]' : 'bg-white/5'}`}>
+                                {speaking ? <VolumeX className="text-white animate-pulse" /> : <Volume2 className="text-white" />}
+                            </button>
+                        </div>
+
+                        <div className="bg-[#111A2E] border border-white/10 rounded-[2.5rem] p-7 shadow-2xl animate-fade-in-up stagger-2">
+                            <div className="space-y-8">
+                                <div>
+                                    <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest block mb-2">اسم الفحص</span>
+                                    <h3 className="text-3xl font-black text-white leading-tight">{result.identifiedTest}</h3>
+                                </div>
+                                <div className="bg-white/5 p-5 rounded-2xl border border-white/5 space-y-3">
+                                    <div className="flex items-center gap-2"><Activity size={14} className="text-[#E31E24]"/><span className="text-[10px] text-slate-400 font-bold uppercase">التشخيص الطبي</span></div>
+                                    <p className="text-white font-bold text-xl">{result.diagnosisAr}</p>
+                                    <p className="text-slate-400 text-sm italic font-medium" dir="ltr">{result.diagnosisEn}</p>
+                                    <div className="flex gap-2 pt-4 border-t border-white/5">
+                                        <div className="bg-blue-500/10 px-3 py-1 rounded-lg text-[10px] font-mono text-blue-300 border border-blue-500/20">ICD-10: {result.icd10Code || 'N/A'}</div>
+                                        <div className="bg-purple-500/10 px-3 py-1 rounded-lg text-[10px] font-mono text-purple-300 border border-purple-500/20">ICD-11: {result.icd11Code || 'N/A'}</div>
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 text-slate-500"><FileText size={16}/><span className="text-[10px] font-bold uppercase">توضيح الحالة</span></div>
+                                    <p className="text-sm text-slate-200 leading-relaxed font-medium">{result.descriptionAr}</p>
+                                    <div className="border-r-2 border-white/10 pr-4 mt-2">
+                                        <p className="text-[11px] text-slate-400 italic" dir="ltr">{result.descriptionEn}</p>
+                                    </div>
+                                </div>
+                                <div className="bg-red-500/5 p-4 rounded-xl text-[10px] text-red-200/60 font-bold leading-relaxed">{result.disclaimer}</div>
+                            </div>
+                        </div>
+
+                        <button onClick={() => {
+                            const txt = `التحليل: ${result.identifiedTest}\nالتشخيص: ${result.diagnosisAr}\nالأكواد: ICD-10 (${result.icd10Code})\n\nالوصف: ${result.descriptionAr}`;
+                            navigator.clipboard.writeText(txt);
+                        }} className="w-full bg-white/5 text-white py-4 rounded-2xl border border-white/10 font-bold text-sm flex items-center justify-center gap-3 active:scale-95 transition-all">
+                            <Clipboard size={18} className="text-[#E31E24]" /> نسخ التقرير الطبي
+                        </button>
+                    </div>
+
+                    <div className="fixed bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#070D1D] via-[#070D1D] to-transparent z-40">
+                        <button onClick={onReset} className="w-full bg-gradient-to-r from-[#1D428A] to-[#E31E24] text-white font-black py-4 rounded-2xl shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-transform">
+                            <Activity className="animate-pulse" size={22} /> فحص روشتة أخرى
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const HistoryView = ({ history, onSelect, onDelete, onBack }) => (
+            <div className="fixed inset-0 bg-[#070D1D] p-8 overflow-y-auto animate-fade-in-up">
+                <div className="flex items-center justify-between mb-10">
+                    <button onClick={onBack} className="p-3 bg-white/5 rounded-2xl text-white active:scale-90"><ChevronLeft size={24}/></button>
+                    <div className="flex items-center gap-3">
+                        <Clock size={20} className="text-blue-400" />
+                        <span className="text-white font-black text-lg">سجل التحاليل</span>
+                    </div>
+                    <div className="w-10"></div>
+                </div>
+                {history.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center opacity-20 mt-32 space-y-6">
+                        <Clock size={100} />
+                        <p className="text-lg font-bold">لا توجد فحوصات سابقة</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {history.map(item => (
+                            <div key={item.id} className="bg-[#111A2E] p-5 rounded-[2rem] border border-white/5 flex justify-between items-center group active:scale-98 transition-all">
+                                <div onClick={() => onSelect(item)} className="flex-1 cursor-pointer">
+                                    <p className="text-[10px] text-blue-400 font-bold mb-1">{new Date(item.timestamp).toLocaleDateString('ar-EG')}</p>
+                                    <h4 className="text-white font-bold truncate max-w-[200px]">{item.identifiedTest}</h4>
+                                </div>
+                                <button onClick={() => onDelete(item.id)} className="p-3 text-red-500/40 active:text-red-500"><Trash2 size={20}/></button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+
+        // --- Main App ---
+        const App = () => {
+            const [state, setState] = useState(AppState.CAMERA);
+            const [captured, setCaptured] = useState(null);
+            const [result, setResult] = useState(null);
+            const [history, setHistory] = useState([]);
+
+            useEffect(() => {
+                const h = localStorage.getItem('alfacam_history');
+                if(h) setHistory(JSON.parse(h));
+            }, []);
+
+            const analyze = async (img) => {
+                setState(AppState.PROC);
+                try {
+                    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+                    const res = await ai.models.generateContent({
+                        model: 'gemini-3-flash-preview',
+                        contents: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: img } }, { text: "Analyze this medical document. Return JSON." }] },
+                        config: { systemInstruction: SYSTEM_PROMPT, responseMimeType: "application/json" }
+                    });
+                    const data = JSON.parse(res.text.trim());
+                    const finalResult = { ...data, id: Math.random().toString(36).substr(2, 9), timestamp: Date.now() };
+                    setResult(finalResult);
+                    const nh = [finalResult, ...history].slice(0, 30);
+                    setHistory(nh); localStorage.setItem('alfacam_history', JSON.stringify(nh));
+                    setState(AppState.RES);
+                } catch(e) { setState(AppState.ERR); }
+            };
+
+            return (
+                <div className="h-screen w-screen bg-[#070D1D] overflow-hidden">
+                    {state === AppState.CAMERA && <CameraView onCapture={analyze} onOpenHistory={() => setState(AppState.HIST)} />}
+                    {state === AppState.PROC && <ProcessingView />}
+                    {state === AppState.RES && <ResultView result={result} onReset={() => setState(AppState.CAMERA)} />}
+                    {state === AppState.HIST && <HistoryView history={history} onSelect={(i) => {setResult(i); setState(AppState.RES);}} onDelete={(id) => setHistory(h => h.filter(x => x.id !== id))} onBack={() => setState(AppState.CAMERA)} />}
+                    {state === AppState.ERR && (
+                        <div className="flex flex-col items-center justify-center h-full p-12 text-center space-y-8">
+                            <AlertCircle size={80} className="text-red-500 animate-pulse" />
+                            <h3 className="text-white font-black text-2xl leading-relaxed">عذراً، حدث خطأ في قراءة الروشتة</h3>
+                            <p className="text-slate-400 text-sm leading-relaxed">يرجى التأكد من وضوح الصورة وتوفر اتصال بالإنترنت.</p>
+                            <button onClick={() => setState(AppState.CAMERA)} className="bg-[#E31E24] text-white px-12 py-4 rounded-2xl font-black shadow-2xl active:scale-95">العودة والمحاولة ثانية</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        createRoot(document.getElementById('root')).render(React.createElement(App));
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
