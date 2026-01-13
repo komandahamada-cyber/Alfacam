@@ -15,22 +15,26 @@ const App = () => {
 
     reader.onloadend = async () => {
       try {
-        const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        const genAI = new GoogleGenerativeAI(apiKey);
+        
+        // التعديل الجوهري: استخدام النسخة الأحدث والأكثر استقراراً
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
         const base64Data = (reader.result as string).split(',')[1];
-        const prompt = "Identify this medical prescription. Return ONLY JSON: {identifiedTest, diagnosisAr, diagnosisEn}";
+        const prompt = "Analyze this medical prescription. Return ONLY a JSON object: {identifiedTest, diagnosisAr, diagnosisEn}";
         
         const imagePart = {
           inlineData: { data: base64Data, mimeType: "image/jpeg" },
         };
 
         const response = await model.generateContent([prompt, imagePart]);
-        const text = response.response.text().replace(/```json|```/g, "").trim();
+        const resultText = response.response.text().replace(/```json|```/g, "").trim();
         
-        setResult(JSON.parse(text));
+        setResult(JSON.parse(resultText));
       } catch (err: any) {
-        alert("فشل التحليل: " + err.message);
+        // لو لسه فيه مشكلة في الموديل، هنعرض رسالة واضحة عشان نعرف السبب
+        alert("تنبيه من جوجل: " + err.message);
       } finally {
         setLoading(false);
       }
@@ -40,33 +44,42 @@ const App = () => {
 
   return (
     <div style={{ background: '#070D1D', color: 'white', minHeight: '100vh', padding: '20px', textAlign: 'center', fontFamily: 'sans-serif' }}>
-      <h1 style={{ color: '#E31E24', fontWeight: 'bold', fontSize: '2.5rem' }}>ALFACAM PRO</h1>
-      <p style={{ color: '#9CA3AF', marginBottom: '30px' }}>نظام التحليل الذكي الرسمي</p>
+      <header style={{ marginBottom: '40px' }}>
+        <h1 style={{ color: '#E31E24', fontSize: '2.5rem', fontWeight: 'bold' }}>ALFACAM PRO</h1>
+        <p style={{ color: '#9CA3AF' }}>نظام فك رموز الروشتات الطبية</p>
+      </header>
       
       {!result ? (
-        <div style={{ marginTop: '50px' }}>
+        <main>
           {loading ? (
-            <p style={{ color: '#E31E24', fontSize: '1.2rem' }}>جاري التحليل... برجاء الانتظار</p>
+            <div style={{ padding: '40px' }}>
+               <div style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #E31E24', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 20px' }}></div>
+               <p style={{ color: '#E31E24' }}>جاري التحليل... ثواني من فضلك</p>
+            </div>
           ) : (
-            <div style={{ border: '2px dashed #1F2937', padding: '60px 20px', borderRadius: '30px', background: '#0B1224', maxWidth: '400px', margin: '0 auto' }}>
-              <label style={{ background: '#E31E24', color: 'white', padding: '15px 30px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold' }}>
-                اختر صورة الروشتة
+            <div style={{ border: '2px dashed #1F2937', padding: '50px 20px', borderRadius: '25px', background: '#0B1224', maxWidth: '400px', margin: '0 auto' }}>
+              <label style={{ background: '#E31E24', color: 'white', padding: '15px 30px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>
+                ارفع صورة الروشتة
                 <input type="file" accept="image/*" onChange={analyzeImage} style={{ display: 'none' }} />
               </label>
             </div>
           )}
-        </div>
+        </main>
       ) : (
-        <div style={{ background: '#111827', padding: '30px', borderRadius: '25px', border: '1px solid #374151', maxWidth: '450px', margin: '20px auto', textAlign: 'right' }}>
-          <h2 style={{ color: '#10B981', textAlign: 'center', marginBottom: '20px' }}>تم التحليل بنجاح ✨</h2>
-          <p style={{ marginBottom: '15px' }}><b>اسم الفحص:</b> {result.identifiedTest}</p>
-          <div style={{ background: '#1F2937', padding: '20px', borderRadius: '15px', borderRight: '5px solid #E31E24' }}>
-             <p style={{ color: '#E31E24', fontSize: '0.9rem', fontWeight: 'bold' }}>التشخيص التقريبي:</p>
-             <p style={{ fontSize: '1.1rem', marginTop: '10px' }}>{result.diagnosisAr}</p>
+        <section style={{ background: '#111827', padding: '30px', borderRadius: '20px', border: '1px solid #374151', maxWidth: '500px', margin: '0 auto', textAlign: 'right' }}>
+          <h2 style={{ color: '#10B981', textAlign: 'center', marginBottom: '20px' }}>نتيجة التحليل ✨</h2>
+          <div style={{ marginBottom: '20px' }}>
+            <span style={{ color: '#9CA3AF', fontSize: '0.9rem' }}>نوع التحليل/الأشعة:</span>
+            <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{result.identifiedTest}</p>
           </div>
-          <button onClick={() => setResult(null)} style={{ width: '100%', marginTop: '30px', padding: '15px', background: '#374151', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>تحليل صورة أخرى</button>
-        </div>
+          <div style={{ background: '#1F2937', padding: '15px', borderRadius: '12px', borderRight: '5px solid #E31E24' }}>
+             <p style={{ color: '#E31E24', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '5px' }}>التشخيص التقريبي:</p>
+             <p style={{ lineHeight: '1.6' }}>{result.diagnosisAr}</p>
+          </div>
+          <button onClick={() => setResult(null)} style={{ width: '100%', marginTop: '30px', padding: '12px', background: '#374151', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer' }}>فحص روشتة أخرى</button>
+        </section>
       )}
+      <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };
